@@ -6,38 +6,55 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-//DefaultPool 默认连接池
-var DefaultPool *redis.Pool
+type Client struct {
+	Pool *redis.Pool
+}
+
+var (
+	defaultPool   *redis.Pool
+	DefaultClient *Client
+)
 
 //NewPool 初始化redis连接池
-func NewPool(serverAddr string, maxIdle int) *redis.Pool {
+func newPool(serverAddr string, maxIdle int) *redis.Pool {
 	pool := redis.NewPool(func() (redis.Conn, error) {
 		return redis.Dial("tcp", serverAddr)
 	}, maxIdle)
 	return pool
 }
 
-//InitDefaultPool 初始化默认连接池
-func InitDefaultPool(serverAddr string, maxIdle int) {
-	DefaultPool = NewPool(serverAddr, maxIdle)
+//GetDefaultClient 返回默认的客户端，如果此前没有调用InitDefaultClient会panic
+func GetDefaultClient() *Client {
+	if DefaultClient == nil {
+		panic(fmt.Errorf("DefaultClient has not init"))
+	}
+	return DefaultClient
 }
 
-//PING 检查连接是否正常
-func PING() (string, error) {
-	if DefaultPool == nil {
-		return "", fmt.Errorf("default pool has not init")
+//InitDefaultClient 在使用默认客户端之前先初始化
+func InitDefaultClient(serverAddr string, maxIdle int) {
+	initDefaultPool(serverAddr, maxIdle)
+	DefaultClient = &Client{
+		Pool: defaultPool,
 	}
-	conn := DefaultPool.Get()
-	defer conn.Close()
-	return redis.String(conn.Do("PING"))
 }
 
-//SET exp 是可选参数，为过期时间second为单位，过期后取出的值为nil
-func SET(key string, val string, exp ...int) error {
-	if DefaultPool == nil {
-		return fmt.Errorf("default pool has not init")
+//NewClient 新建一个redis客户端
+func NewClient(serverAddr string, maxIdle int) *Client {
+	cli := &Client{
+		Pool: newPool(serverAddr, maxIdle),
 	}
-	conn := DefaultPool.Get()
+	return cli
+}
+
+//initDefaultPool 初始化默认连接池
+func initDefaultPool(serverAddr string, maxIdle int) {
+	defaultPool = newPool(serverAddr, maxIdle)
+}
+
+//SET [Strings Group] exp 是可选参数，为过期时间second为单位，过期后取出的值为nil
+func (cli *Client) SET(key string, val string, exp ...int) error {
+	conn := cli.Pool.Get()
 	defer conn.Close()
 	if len(exp) == 0 {
 		_, err := conn.Do("SET", key, val)
@@ -53,30 +70,42 @@ func SET(key string, val string, exp ...int) error {
 	return nil
 }
 
-//GET 如果是空值val 为"nil"
-func GET(key string) (val string, err error) {
-	if DefaultPool == nil {
-		return "", fmt.Errorf("default pool has not init")
-	}
-	conn := DefaultPool.Get()
+//GET [Strings Group] 如果是空值val 为"nil"
+func (cli *Client) GET(key string) (val string, err error) {
+	conn := cli.Pool.Get()
 	defer conn.Close()
-	valInf, err := conn.Do("GET", key)
-	if err != nil {
-		return "", err
-	}
-	if valInf == nil {
-		return "nil", nil
-	}
-	return redis.String(valInf, err)
+	val, err = redis.String(conn.Do("GET", key))
+	return
+	/*
+		if err != nil {
+			return "", err
+		}
+		if valInf == nil {
+			return "", nil
+		}
+		return redis.String(valInf, err)
+	*/
+}
+
+//STRLEN [Strings Group] 获取key对应的val的长度
+func (cli *Client) STRLEN(key string) (len int64, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	len, err = redis.Int64(conn.Do("STRLEN", key))
+	return
 }
 
 //DEL 删除之后再去GET会取出nil
-func DEL(key string) (err error) {
-	if DefaultPool == nil {
-		return fmt.Errorf("default pool has not init")
-	}
-	conn := DefaultPool.Get()
+func (cli *Client) DEL(key string) (err error) {
+	conn := cli.Pool.Get()
 	defer conn.Close()
 	_, err = conn.Do("DEL", key)
 	return err
+}
+
+//PING 检查连接是否正常
+func (cli *Client) PING() (string, error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	return redis.String(conn.Do("PING"))
 }
