@@ -76,15 +76,6 @@ func (cli *Client) GET(key string) (val string, err error) {
 	defer conn.Close()
 	val, err = redis.String(conn.Do("GET", key))
 	return
-	/*
-		if err != nil {
-			return "", err
-		}
-		if valInf == nil {
-			return "", nil
-		}
-		return redis.String(valInf, err)
-	*/
 }
 
 //STRLEN [Strings Group] 获取key对应的val的长度
@@ -92,6 +83,43 @@ func (cli *Client) STRLEN(key string) (len int64, err error) {
 	conn := cli.Pool.Get()
 	defer conn.Close()
 	len, err = redis.Int64(conn.Do("STRLEN", key))
+	return
+}
+
+//INCR [Strings Group] 如果key的val可以被解析成int或者float，就会增加1
+func (cli *Client) INCR(key string) (val int64, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	val, err = redis.Int64(conn.Do("INCR", key))
+	return
+}
+
+//DECR [Strings Group] 如果key的val可以被解析成int或者float，就会减去1
+func (cli *Client) DECR(key string) (val int64, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	val, err = redis.Int64(conn.Do("DECR", key))
+	return
+}
+
+func (cli *Client) INCRBY(key string, num int64) (val int64, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	val, err = redis.Int64(conn.Do("INCRBY", key, num))
+	return
+}
+
+func (cli *Client) DECRBY(key string, num int64) (val int64, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	val, err = redis.Int64(conn.Do("DECRBY", key, num))
+	return
+}
+
+func (cli *Client) INCRBYFLOAT(key string, num float64) (val float64, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	val, err = redis.Float64(conn.Do("INCRBYFLOAT", key, num))
 	return
 }
 
