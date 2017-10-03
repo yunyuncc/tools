@@ -52,7 +52,7 @@ func initDefaultPool(serverAddr string, maxIdle int) {
 	defaultPool = newPool(serverAddr, maxIdle)
 }
 
-//SET [Strings Group] exp 是可选参数，为过期时间second为单位，过期后取出的值为nil
+//SET [Strings Group] exp 是可选参数，为过期时间ms为单位，过期后取出的值为nil
 func (cli *Client) SET(key string, val string, exp ...int) error {
 	conn := cli.Pool.Get()
 	defer conn.Close()
@@ -62,7 +62,7 @@ func (cli *Client) SET(key string, val string, exp ...int) error {
 			return err
 		}
 	} else if len(exp) == 1 {
-		_, err := conn.Do("SET", key, val, "ex", exp[0])
+		_, err := conn.Do("SET", key, val, "px", exp[0])
 		if err != nil {
 			return err
 		}
@@ -182,6 +182,82 @@ func (cli *Client) LTRIM(key string, start, end int64) (err error) {
 	defer conn.Close()
 	_, err = conn.Do("LTRIM", key, start, end)
 	return err
+}
+
+//LLEN [Lists Group] 获取列表长度
+func (cli *Client) LLEN(key string) (len int64, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	return redis.Int64(conn.Do("LLEN", key))
+}
+
+/*
+//blpop暂时无法封装，keys 无法传递给conn.Do
+func (cli *Client) BLPOP(timeout int64, keys ...string) (val string, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	reply, err := conn.Do("BLPOP", keys, timeout)
+	res, err := redis.Strings(reply, err)
+	fmt.Printf("reply:%v   err:%v\n", res, err)
+	return "", nil
+	//return redis.Strings(conn.Do("BLPOP", key, timeout))
+
+}
+*/
+
+//SADD [Sets Group] 添加一个item到key中
+func (cli *Client) SADD(key string, item string) (success bool, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	success, err = redis.Bool(conn.Do("SADD", key, item))
+	return success, err
+}
+
+//SREM [Sets Group] 从key中删除item
+func (cli *Client) SREM(key string, item string) (success bool, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	success, err = redis.Bool(conn.Do("SREM", key, item))
+	return success, err
+}
+
+//SISMEMBER [Sets Group] 判断item是不是key得成员之一
+func (cli *Client) SISMEMBER(key string, item string) (is bool, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	is, err = redis.Bool(conn.Do("SISMEMBER", key, item))
+	return is, err
+}
+
+//SCARD [Sets Group] 返回key 的set 的值的个数
+func (cli *Client) SCARD(key string) (num int64, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	num, err = redis.Int64(conn.Do("SCARD", key))
+	return
+}
+
+//SMEMBERS [Sets Group] 返回key的所有值
+func (cli *Client) SMEMBERS(key string) (members []string, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	members, err = redis.Strings(conn.Do("SMEMBERS", key))
+	return
+}
+
+//SRANDMEMBER [Sets Group] 从key中随机取出 |count| 个items,count为负表示可重复
+//count为正表示不可重复
+func (cli *Client) SRANDMEMBER(key string, count int) (members []string, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	return redis.Strings(conn.Do("SRANDMEMBER", key, count))
+}
+
+//SPOP [Sets Group] 从key中随机删除一个item,返回被删除的item
+func (cli *Client) SPOP(key string) (item string, err error) {
+	conn := cli.Pool.Get()
+	defer conn.Close()
+	return redis.String(conn.Do("SPOP", key))
 }
 
 //DEL 删除之后再去GET会取出nil
